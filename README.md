@@ -237,8 +237,10 @@ Je l'ai conçu pour tourner **en local, une instance par personne**. Le token Ko
 ### Par dépôt git — ce que je recommande
 
 ```bash
-gh repo create kobotoolbox-mcp-server --public --source=. --push
+git push
 ```
+
+Le dépôt est publié ici : <https://github.com/OuattaraTech/kobotoolbox-mcp-server>. Un collaborateur n'a plus qu'à le cloner.
 
 Le `.gitignore` exclut `.env`, `node_modules/`, `dist/` et `out/` : ni le token ni les rapports déjà générés ne partent avec le code.
 
@@ -256,7 +258,7 @@ tar --exclude=node_modules --exclude=dist --exclude=.env --exclude=out --exclude
 Elle suit [Installation](#installation), avec **son** token Kobo :
 
 ```bash
-git clone <url> && cd kobotoolbox-mcp-server
+git clone https://github.com/OuattaraTech/kobotoolbox-mcp-server.git && cd kobotoolbox-mcp-server
 npm install && npm run build
 python3 -m pip install -r requirements.txt   # "py -m pip" sous Windows
 cp .env.example .env          # puis y mettre son propre KOBO_API_TOKEN
@@ -272,10 +274,10 @@ Premier test à lui indiquer : demander à Claude de lancer `kobo_doctor`, qui v
 Le `package.json` est déjà prêt pour la publication (`bin`, `files`, `prepublishOnly`), et l'installation tiendrait alors en une commande, sans clone ni build :
 
 ```bash
-claude mcp add kobotoolbox --scope user --env KOBO_API_TOKEN=xxx -- npx -y @moi/kobotoolbox-mcp-server
+claude mcp add kobotoolbox --scope user --env KOBO_API_TOKEN=xxx -- npx -y @ouattaratech/kobotoolbox-mcp-server
 ```
 
-Deux choses à régler avant de publier : le nom `kobotoolbox-mcp-server` est **déjà pris sur npm** par un autre projet, il faut donc un nom scopé (`@moi/kobotoolbox-mcp-server`) ; et `repository.url` pointe vers un dépôt qui n'existe pas encore.
+Deux choses à régler avant de publier : le nom `kobotoolbox-mcp-server` est **déjà pris sur npm** par un autre projet, il faut donc un nom scopé (`@ouattaratech/kobotoolbox-mcp-server`) ; et `repository.url` pointe vers un dépôt qui n'existe pas encore.
 
 ### Une seule instance pour toute une équipe
 
