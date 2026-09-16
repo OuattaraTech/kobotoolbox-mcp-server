@@ -1,0 +1,11 @@
+# Python side of the report renderer (scripts/render_report.py).
+# Install with:  python3 -m pip install -r requirements.txt
+# The interpreter used is $PYTHON_BIN (default: python3).
+
+# Required — Excel workbooks with native charts, and chart images.
+xlsxwriter>=3.1
+matplotlib>=3.7
+
+# Required only for Word (.docx) output; PDF additionally needs LibreOffice
+# (`soffice`) on PATH, which is not a pip package.
+python-docx>=1.1

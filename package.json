@@ -1,0 +1,58 @@
+{
+  "name": "kobotoolbox-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for KoboToolbox: build and deploy XLSForms, manage sharing and submissions, and export or analyse the collected data",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "axios": "^1.7.9",
+    "dotenv": "^17.4.2",
+    "express": "^4.21.2",
+    "qrcode": "^1.5.4",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.10.5",
+    "@types/qrcode": "^1.5.6",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.9"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "bin": {
+    "kobotoolbox-mcp-server": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "scripts",
+    "requirements.txt",
+    "README.md",
+    ".env.example"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ouattara/kobotoolbox-mcp-server.git"
+  },
+  "keywords": [
+    "mcp",
+    "kobotoolbox",
+    "kobo",
+    "xlsform",
+    "odk",
+    "survey",
+    "data-collection"
+  ],
+  "license": "MIT"
+}

@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env
+*.log
+
+# Generated deliverables (Excel / Word / PDF reports)
+out/
