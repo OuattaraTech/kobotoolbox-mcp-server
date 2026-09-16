@@ -32,9 +32,12 @@ function resolveOutputDir(): string {
 }
 export const OUTPUT_DIR = resolveOutputDir();
 
-// Python interpreter used to render reports. It must have pandas, xlsxwriter,
-// python-docx and matplotlib available.
-export const PYTHON_BIN = process.env.PYTHON_BIN || "python3";
+// Python interpreter used to render reports. It must have xlsxwriter,
+// matplotlib and python-docx available. Windows ships no "python3" on the PATH
+// -- that name is taken there by a Microsoft Store stub -- so the default has
+// to differ per platform.
+export const PYTHON_BIN =
+  process.env.PYTHON_BIN || (process.platform === "win32" ? "python" : "python3");
 
 // Character limit applied to formatted text responses to keep them
 // manageable in the model's context window.

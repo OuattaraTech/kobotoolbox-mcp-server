@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import * as kobo from "../services/koboClient.js";
-import { checkRenderer } from "../services/renderer.js";
+import { checkRenderer, checkLibreOffice } from "../services/renderer.js";
 import { KOBO_BASE_URL, KOBO_API_TOKEN, OUTPUT_DIR, PYTHON_BIN } from "../constants.js";
 import { errorContent, truncate } from "./shared.js";
 
@@ -12,9 +12,13 @@ const DoctorInputSchema = z
   .strict();
 
 /**
- * One place to answer "why isn't this working?", covering the three things that
+ * One place to answer "why isn't this working?", covering the things that
  * actually break in practice: a missing or wrong API token, an unreachable
- * server, and a Python environment without the report renderer's dependencies.
+ * server, a Python environment without the report renderer's dependencies, and
+ * a LibreOffice that the PDF step cannot find.
+ *
+ * Checks flagged `optional` never fail the diagnosis: they gate one output
+ * format, not the server, so they are reported as a limitation instead.
  */
 export function registerDoctorTools(server: McpServer): void {
   server.registerTool(
@@ -31,7 +35,7 @@ Returns: a pass/fail line per check, with the exact command to fix anything brok
     },
     async (params: z.infer<typeof DoctorInputSchema>) => {
       try {
-        const checks: Array<{ name: string; ok: boolean; detail: string }> = [];
+        const checks: Array<{ name: string; ok: boolean; detail: string; optional?: boolean }> = [];
 
         checks.push({
           name: "KOBO_BASE_URL",
@@ -62,9 +66,20 @@ Returns: a pass/fail line per check, with the exact command to fix anything brok
         const renderer = await checkRenderer();
         checks.push({ name: `Python renderer (${PYTHON_BIN})`, ok: renderer.ok, detail: renderer.detail });
 
+        // Only reached when Python itself works, since the check runs through it.
+        if (renderer.ok) {
+          const libreOffice = await checkLibreOffice();
+          checks.push({
+            name: "LibreOffice (PDF)",
+            ok: libreOffice.ok,
+            detail: libreOffice.detail,
+            optional: true,
+          });
+        }
+
         checks.push({ name: "Output directory", ok: true, detail: OUTPUT_DIR });
 
-        const allOk = checks.every((c) => c.ok);
+        const allOk = checks.every((c) => c.ok || c.optional);
         const output = { ok: allOk, checks };
 
         if (params.response_format === "json") {
@@ -74,8 +89,16 @@ Returns: a pass/fail line per check, with the exact command to fix anything brok
           };
         }
 
-        const lines = checks.map((c) => `${c.ok ? "✓" : "✗"} **${c.name}** — ${c.detail}`);
-        const text = `${allOk ? "All checks passed." : "Some checks failed."}\n\n${lines.join("\n")}`;
+        const lines = checks.map(
+          (c) => `${c.ok ? "✓" : c.optional ? "!" : "✗"} **${c.name}** — ${c.detail}`
+        );
+        const limitations = checks.filter((c) => !c.ok && c.optional).length;
+        const headline = !allOk
+          ? "Some checks failed."
+          : limitations
+            ? "All required checks passed, with one limitation (marked !)."
+            : "All checks passed.";
+        const text = `${headline}\n\n${lines.join("\n")}`;
         return { content: [{ type: "text" as const, text: truncate(text) }], structuredContent: output };
       } catch (error) {
         return errorContent(error);

@@ -23,9 +23,9 @@ export interface RenderResult {
 export class RenderError extends Error {}
 
 /**
- * Hands the report spec to the Python renderer (pandas/xlsxwriter/python-docx
- * do the things Node libraries cannot: native Excel charts and real Word
- * documents) and returns the paths it wrote.
+ * Hands the report spec to the Python renderer (xlsxwriter/matplotlib/
+ * python-docx do the things Node libraries cannot: native Excel charts and
+ * real Word documents) and returns the paths it wrote.
  */
 export async function renderReport(spec: Record<string, unknown>): Promise<RenderResult> {
   const specPath = path.join(
@@ -77,9 +77,17 @@ function run(
 
     child.on("error", (err: NodeJS.ErrnoException) => {
       if (err.code === "ENOENT") {
+        const hint =
+          process.platform === "win32"
+            ? `Sous Windows l'interpréteur s'appelle "python", pas "python3" : mettez PYTHON_BIN=python dans le .env, ou le chemin complet de python.exe.`
+            : `Renseignez PYTHON_BIN avec le chemin complet d'un Python disposant de xlsxwriter, matplotlib et python-docx.`;
+        reject(new RenderError(`Interpréteur Python introuvable ("${command}"). ${hint}`));
+      } else if (err.code === "EINVAL" && process.platform === "win32") {
+        // Node refuses to spawn .bat/.cmd wrappers without a shell, which is
+        // what PYTHON_BIN often points at on Windows (Anaconda, py launcher).
         reject(
           new RenderError(
-            `Interpréteur Python introuvable ("${command}"). Renseignez PYTHON_BIN avec le chemin complet d'un Python disposant de pandas, xlsxwriter, python-docx et matplotlib.`
+            `Windows refuse de lancer "${command}" directement. Faites pointer PYTHON_BIN sur le python.exe lui-même, pas sur un script .bat ou .cmd.`
           )
         );
       } else {
@@ -143,5 +151,29 @@ export async function checkRenderer(): Promise<{ ok: boolean; detail: string; mi
     return { ok: true, detail: `Moteur de rendu prêt (${PYTHON_BIN}).`, missing: [] };
   } catch (error) {
     return { ok: false, detail: (error as Error).message, missing: [...REQUIRED, ...OPTIONAL] };
+  }
+}
+
+/**
+ * Asks the Python script whether it can find LibreOffice, which owns the
+ * per-OS lookup. Only PDF output depends on it, so a false here is a
+ * limitation to report rather than a broken install.
+ */
+export async function checkLibreOffice(): Promise<{ ok: boolean; detail: string }> {
+  try {
+    const { stdout, code } = await run(PYTHON_BIN, [SCRIPT_PATH, "--check-soffice"]);
+    if (code !== 0) {
+      return { ok: false, detail: `Vérification impossible : Python a renvoyé le code ${code}.` };
+    }
+    const parsed = JSON.parse(stdout.trim() || "{}");
+    if (parsed.ok) {
+      return { ok: true, detail: `LibreOffice trouvé (${parsed.path}) — export PDF disponible.` };
+    }
+    return {
+      ok: false,
+      detail: `introuvable : seul l'export PDF est concerné, les sorties xlsx et docx fonctionnent. Installez-le (${parsed.hint}) ou renseignez SOFFICE_BIN dans le .env avec le chemin complet du binaire.`,
+    };
+  } catch (error) {
+    return { ok: false, detail: (error as Error).message };
   }
 }

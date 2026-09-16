@@ -16,10 +16,12 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
 from datetime import datetime
+from pathlib import Path
 
 import matplotlib
 
@@ -658,15 +660,82 @@ def add_docx_table(doc, table: dict, Pt):
 # PDF (via LibreOffice)
 # --------------------------------------------------------------------------
 
+# Only the Linux package managers put LibreOffice on the PATH. The macOS and
+# Windows installers drop it at a fixed location and leave the PATH alone, so
+# those have to be probed explicitly before giving up.
+SOFFICE_INSTALL_PATHS = {
+    "darwin": [
+        "/Applications/LibreOffice.app/Contents/MacOS/soffice",
+        "/opt/homebrew/bin/soffice",
+        "/usr/local/bin/soffice",
+    ],
+    "win32": [
+        r"C:\Program Files\LibreOffice\program\soffice.exe",
+        r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
+    ],
+    "linux": [
+        "/usr/bin/soffice",
+        "/usr/local/bin/soffice",
+        "/snap/bin/libreoffice",
+        "/var/lib/flatpak/exports/bin/org.libreoffice.LibreOffice",
+    ],
+}
+
+
+def soffice_install_hint() -> str:
+    """The install command to quote back when LibreOffice is missing."""
+    if sys.platform == "darwin":
+        return "brew install --cask libreoffice"
+    if sys.platform == "win32":
+        return "installeur à télécharger sur https://www.libreoffice.org/download/"
+    return "sudo apt install libreoffice"
+
+
+def find_soffice() -> str | None:
+    """Locates the LibreOffice binary used for PDF conversion, or None."""
+    override = os.environ.get("SOFFICE_BIN", "").strip()
+    if override:
+        if os.path.isfile(override):
+            return override
+        return shutil.which(override)
+
+    for name in ("soffice", "libreoffice"):
+        found = shutil.which(name)
+        if found:
+            return found
+
+    candidates = list(SOFFICE_INSTALL_PATHS.get(sys.platform, []))
+    if sys.platform == "win32":
+        # Per-user installs land under %LOCALAPPDATA% rather than Program Files.
+        local_app_data = os.environ.get("LOCALAPPDATA")
+        if local_app_data:
+            candidates.append(
+                os.path.join(local_app_data, "Programs", "LibreOffice", "program", "soffice.exe")
+            )
+    for candidate in candidates:
+        if os.path.isfile(candidate):
+            return candidate
+    return None
+
 
 def build_pdf(docx_path: str, out_dir: str) -> str:
     """Converts the Word report to PDF. Requires LibreOffice on the machine."""
-    profile = os.path.join(tempfile.gettempdir(), "kobo_mcp_lo_profile")
+    soffice = find_soffice()
+    if not soffice:
+        raise RuntimeError(
+            "LibreOffice est introuvable : la conversion PDF est impossible "
+            "(les sorties xlsx et docx, elles, ne sont pas concernées). "
+            f"Installez-le ({soffice_install_hint()}) ou renseignez SOFFICE_BIN "
+            "dans le .env avec le chemin complet du binaire."
+        )
+    profile = Path(tempfile.gettempdir()) / "kobo_mcp_lo_profile"
     cmd = [
-        "soffice",
+        soffice,
         "--headless",
         "--norestore",
-        f"-env:UserInstallation=file://{profile}",
+        # as_uri() rather than "file://" + path: on Windows the temp directory
+        # carries a drive letter and backslashes, which are not a valid URL.
+        f"-env:UserInstallation={profile.as_uri()}",
         "--convert-to",
         "pdf",
         "--outdir",
@@ -677,7 +746,7 @@ def build_pdf(docx_path: str, out_dir: str) -> str:
     produced = os.path.join(out_dir, os.path.splitext(os.path.basename(docx_path))[0] + ".pdf")
     if not os.path.exists(produced):
         raise RuntimeError(
-            "La conversion PDF via LibreOffice a échoué. "
+            f"La conversion PDF via LibreOffice ({soffice}) a échoué. "
             f"stdout={proc.stdout.strip()[:400]} stderr={proc.stderr.strip()[:400]}"
         )
     return produced
@@ -687,6 +756,16 @@ def build_pdf(docx_path: str, out_dir: str) -> str:
 
 
 def main() -> int:
+    if len(sys.argv) >= 2 and sys.argv[1] == "--check-soffice":
+        soffice = find_soffice()
+        print(
+            json.dumps(
+                {"ok": bool(soffice), "path": soffice or "", "hint": soffice_install_hint()},
+                ensure_ascii=False,
+            )
+        )
+        return 0
+
     if len(sys.argv) < 2:
         print(json.dumps({"ok": False, "error": "Usage: render_report.py <spec.json>"}))
         return 1

@@ -5,3 +5,7 @@ dist/
 
 # Generated deliverables (Excel / Word / PDF reports)
 out/
+
+# Python bytecode cache
+__pycache__/
+*.pyc

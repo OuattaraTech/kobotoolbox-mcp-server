@@ -106,16 +106,27 @@ Les croisements sont livrés sous forme de **tableaux calculés**, pas d'objets 
 
 ### 1. Prérequis
 
-- **Node.js ≥ 18**
-- **Python 3** avec les librairies de rendu :
-  ```bash
-  python3 -m pip install -r requirements.txt
-  ```
-  `xlsxwriter` et `matplotlib` sont requis ; `python-docx` ne l'est que pour les sorties Word et PDF. L'outil `kobo_doctor` te dit exactement ce qui manque.
-- **LibreOffice** (uniquement pour l'export PDF)
-  ```bash
-  sudo apt install libreoffice   # Debian / Ubuntu
-  ```
+Le serveur tourne sur **Linux, macOS et Windows**. Il lui faut trois choses :
+
+| | Linux (Debian/Ubuntu) | macOS | Windows |
+|---|---|---|---|
+| **Node.js ≥ 18** | `sudo apt install nodejs` | `brew install node` | [nodejs.org](https://nodejs.org) |
+| **Python 3** | `sudo apt install python3 python3-pip` | `brew install python` | [python.org](https://www.python.org/downloads/) — coche **« Add python.exe to PATH »** à l'installation |
+| **LibreOffice** *(export PDF uniquement)* | `sudo apt install libreoffice` | `brew install --cask libreoffice` | [libreoffice.org](https://www.libreoffice.org/download/) |
+
+Puis les librairies Python du moteur de rendu :
+
+```bash
+python3 -m pip install -r requirements.txt   # Linux / macOS
+py -m pip install -r requirements.txt        # Windows
+```
+
+`xlsxwriter` et `matplotlib` sont requis ; `python-docx` ne l'est que pour les sorties Word et PDF. L'outil `kobo_doctor` te dit exactement ce qui manque.
+
+**Deux pièges hors Linux**, que le serveur gère seul mais qu'il vaut mieux connaître :
+
+- Sur **Windows**, la commande s'appelle `python`, pas `python3` — ce dernier nom y est réservé à un raccourci qui ouvre le Microsoft Store. Le serveur choisit donc `python` par défaut sur Windows et `python3` ailleurs ; `PYTHON_BIN` n'est à renseigner que si ton interpréteur est ailleurs (Anaconda, venv).
+- Sur **macOS et Windows**, l'installeur LibreOffice ne met rien dans le `PATH`. Le serveur va donc le chercher à son emplacement standard (`/Applications/LibreOffice.app/…`, `C:\Program Files\LibreOffice\…`). S'il est installé ailleurs, renseigne `SOFFICE_BIN`.
 
 ### 2. Récupérer ton token API Kobo
 
@@ -131,6 +142,8 @@ npm run build
 cp .env.example .env   # puis renseigne KOBO_API_TOKEN
 ```
 
+> Sous Windows, `cp` existe dans PowerShell ; dans l'invite de commandes classique, écris `copy .env.example .env`.
+
 Variables du `.env` :
 
 | Variable | Rôle |
@@ -138,7 +151,8 @@ Variables du `.env` :
 | `KOBO_API_TOKEN` | **Requis.** Ton token API Kobo |
 | `KOBO_BASE_URL` | `https://kf.kobotoolbox.org` (global) ou `https://eu.kobotoolbox.org` (Europe) |
 | `KOBO_OUTPUT_DIR` | Dossier où sont écrits les rapports. Par défaut `./out` dans le projet |
-| `PYTHON_BIN` | Chemin du Python qui possède les librairies (mets le chemin absolu si tu utilises Anaconda) |
+| `PYTHON_BIN` | Interpréteur Python qui possède les librairies. Par défaut `python3` (Linux/macOS) ou `python` (Windows) ; mets le chemin absolu si tu utilises Anaconda ou un venv |
+| `SOFFICE_BIN` | Binaire LibreOffice pour l'export PDF. Détecté automatiquement ; à renseigner seulement s'il est installé hors des emplacements standards |
 | `MCP_ACCESS_KEY` | Uniquement pour le transport HTTP |
 | `KOBO_KC_URL` | Hôte KoboCAT pour l'envoi de données. Déduit automatiquement ; à renseigner sur une instance auto-hébergée |
 | `KOBO_RETRY_ATTEMPTS` | Nombre de tentatives sur throttling/erreur serveur (défaut `3`) |
@@ -147,8 +161,14 @@ Variables du `.env` :
 ### 4. Brancher à Claude Code
 
 ```bash
+# Linux / macOS
 claude mcp add kobotoolbox --scope user -- node /chemin/absolu/vers/kobotoolbox-mcp-server/dist/index.js
+
+# Windows (PowerShell) — chemin absolu lui aussi, avec la lettre de lecteur
+claude mcp add kobotoolbox --scope user -- node C:\Users\moi\kobotoolbox-mcp-server\dist\index.js
 ```
+
+Le chemin doit être **absolu** : `--scope user` enregistre le serveur pour tout le compte, donc Claude Code peut ensuite être lancé depuis n'importe quel dossier — sans jamais revenir dans celui du projet. Le serveur lit son `.env` à côté de son propre code, pas dans le répertoire courant.
 
 Vérifie avec `claude mcp list`. Après toute modification du code : `npm run build`, puis relance Claude Code.
 
@@ -229,6 +249,8 @@ tar --exclude=node_modules --exclude=dist --exclude=.env --exclude=out --exclude
     -czf ~/kobo-mcp.tar.gz -C ~/Documents kobotoolbox-mcp-server
 ```
 
+(`tar` est présent d'origine sur Windows 10+ ; il suffit d'y adapter les chemins.)
+
 ### Ce que la personne fait de son côté
 
 Elle suit [Installation](#installation), avec **son** token Kobo :
@@ -236,10 +258,12 @@ Elle suit [Installation](#installation), avec **son** token Kobo :
 ```bash
 git clone <url> && cd kobotoolbox-mcp-server
 npm install && npm run build
-python3 -m pip install -r requirements.txt
+python3 -m pip install -r requirements.txt   # "py -m pip" sous Windows
 cp .env.example .env          # puis y mettre son propre KOBO_API_TOKEN
 claude mcp add kobotoolbox --scope user -- node /chemin/absolu/vers/dist/index.js
 ```
+
+Ça marche sur les trois systèmes ; les seules différences (nom de l'interpréteur Python, installation de LibreOffice, forme du chemin absolu) sont détaillées dans les [Prérequis](#1-prérequis).
 
 Premier test à lui indiquer : demander à Claude de lancer `kobo_doctor`, qui vérifie d'un coup la connexion, le token, les librairies Python et le dossier de sortie.
 
@@ -266,7 +290,15 @@ C'est le [transport HTTP](#transport-http-optionnel) ci-dessous, mais je ne le c
 Pour partager le serveur sur le réseau plutôt que de l'exécuter en local :
 
 ```bash
+# Linux / macOS
 TRANSPORT=http PORT=3000 MCP_ACCESS_KEY=$(openssl rand -hex 32) npm start
+```
+
+```powershell
+# Windows (PowerShell) — openssl n'y est pas livré d'office
+$env:TRANSPORT="http"; $env:PORT="3000"
+$env:MCP_ACCESS_KEY=-join ((1..32) | ForEach-Object { '{0:x2}' -f (Get-Random -Max 256) })
+npm start
 ```
 
 L'endpoint est alors `http://<hôte>:3000/mcp`, protégé par `Authorization: Bearer <MCP_ACCESS_KEY>`. Dans ce mode, les rapports sont écrits sur le serveur, pas sur la machine du client — il faudrait ajouter un endpoint de téléchargement pour les récupérer.
